@@ -65,7 +65,7 @@ function normalizeReasoning(obj: Record<string, unknown>): void {
 解析规则（避免误删）：
 
 1. 模型声明了 `supportedEfforts`（如 `hy3-x` 返回 `["low","high"]`）→ 仅暴露 `Off` + 声明档位。
-2. `id` 以 `hy3` 开头（CLI 入口未声明，但同族 hy3-x 已证明只有 `low/high`）→ 固定 `Off/Low/High`，不暴露无效的 `medium`。
+2. `id` 以 `hy3` 开头（CLI 入口未声明）→ 固定 `Off/Low/High/Max`。`max` 已于 2026-08-23 实测：WB 上游**支持** `reasoning_effort:"max"`，返回真实 `reasoning_content` 且强度高于 API `high` 档，正好对齐 WorkBuddy 桌面端 UI 的 "high" 选择。`medium` 仍排除（hy3 上游静默忽略）。
 3. 模型未声明支持集合（如 `deepseek-v4-*`）→ 保留**完整通用档位** `Off/Low/Medium/High`，`medium` 可正常选择、不被裁剪。
 
 ```ts
@@ -76,14 +76,34 @@ function resolveEffortLevels(info: WorkBuddyModelInfo): readonly string[] {
     for (const level of ['low', 'medium', 'high']) if (set.has(level)) levels.push(level)
     return levels
   }
-  if (info.id.startsWith('hy3')) return ['off', 'low', 'high']
+  if (info.id.startsWith('hy3')) return ['off', 'low', 'high', 'max']
   return ['off', 'low', 'medium', 'high']
 }
 ```
 
 > 实证（`getSupportedThinkingLevels`）：
-> - hy3 / hy3-x → `["off","low","high"]`
+> - hy3 / hy3-x → `["off","low","high","max"]`（max 已验证上游支持）
 > - deepseek-v4-flash / deepseek-v4-pro → `["off","low","medium","high"]`
+
+### 2.4 多模态声明：让 hy3 能收图片 （修复"不支持图片"拦截）
+
+**现象**：在 DSH 给 hy3 发图片时提示「当前模型不支持图片，请切换支持图片的模型」。
+
+**根因**：DSH 判断"模型能否收图"取决于 pi-ai 模型描述里的 `input` 模态数组——`dsh-llm` 会检查 `modelInfo.inputModalities.includes("image")`，不含 `image` 就拦截发图。而 **WorkBuddy 上游 catalog 不暴露 vision 能力字段**，插件原本把 `input` 写死成 `['text']`，于是 hy3（本身是多模态）被误判为纯文本。
+
+**更深层问题（2026-08-24 实测）**：仅靠 `upstream.ts` 单一处的 `id.toLowerCase().startsWith('hy3')` 启发式不够稳健——插件启动后用一次性 `fetchModels()` 把静态 fallback 列表覆盖为上游真实 catalog，若该路径漏设 `supportsVision`，hy3 会退化为纯 text；且压缩（compaction）会按 text-only 把历史图片投影掉并钉死，体感就是"上下文满了之后图片能力消失"。因此改为**三层防御 + 一处运行时观测**：
+
+1. **`src/upstream.ts`** — 新增 `isKnownMultimodalModel(id)` 显式白名单：覆盖 `hy3*` 全系，以及上游描述明确为"多模态/原生多模态"的 `glm-5v-turbo` / `kimi-k2.7` / `kimi-k2.6` / `minimax-m3`（大小写不敏感）。`fetchModels()` 用 `isKnownMultimodalModel(id)` 替代脆弱的 `startsWith('hy3')`。
+2. **`src/catalog.ts`** — `FALLBACK_WORKBUDDY_MODELS` 静态回退列表里，给所有已知多模态模型（`hy3`、`hy3-x`、`glm-5v-turbo`、`kimi-k2.7`、`kimi-k2.6`、`minimax-m3`）显式加 `supportsVision: true`，并补齐动态 catalog 实际返回的 `hy3-x`、`glm-5.3`，保证首屏/离线/动态刷新前的清单绝不会退化成纯 text。
+3. **`src/adapter.ts`** — `toPiModel()` 用双保险兜底：
+   ```ts
+   const supportsVision = info.supportsVision === true || isKnownMultimodalModel(info.id)
+   const input = supportsVision ? ['image', 'text'] : ['text']
+   ```
+   即便 catalog 某条漏设 `supportsVision`，`input` 也一定含 `image`，结构上杜绝退化。
+4. **`src/web-status.ts` + `src/status-paths.ts`** — 状态路由暴露每个模型的 `supportsVision` 字段，便于重启后通过 `/plugins/dsh-workbuddy-connect/status` 直接观测运行时 hy3 是否真的是 vision（区分"后端退化"还是"前端缓存"）。
+
+> 实证：三层防御部署后，重启 3090，`/status` 显示 `hy3` / `hy3-x` 的 `supportsVision: true`，新会话发图不再提示"不支持图片"，且压缩前后图片判定一致（2026-08-24 验证）。
 
 ---
 

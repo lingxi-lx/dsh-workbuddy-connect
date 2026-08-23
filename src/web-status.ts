@@ -68,6 +68,7 @@ export async function workBuddyWebStatus(
       ...model.credits === undefined ? {} : { credits: model.credits },
       ...model.descriptionZh === undefined ? {} : { descriptionZh: model.descriptionZh },
       ...model.reasoningEffort === undefined ? {} : { reasoningEffort: model.reasoningEffort },
+      ...model.supportsVision === true ? { supportsVision: true } : { supportsVision: false },
     }))
   const status: WorkBuddyWebStatus = {
     status: 'signed-in',

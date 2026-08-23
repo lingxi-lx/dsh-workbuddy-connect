@@ -26,6 +26,8 @@ export interface WorkBuddyWebModel {
   descriptionZh?: string
   /** Default reasoning effort, e.g. "high" / "medium". */
   reasoningEffort?: string
+  /** Whether the model accepts image input; `false` means text-only. */
+  supportsVision: boolean
 }
 
 /** The JSON document the plugin card renders. */

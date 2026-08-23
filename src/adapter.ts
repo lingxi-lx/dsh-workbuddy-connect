@@ -16,6 +16,7 @@ import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { WorkBuddyCredentialStore } from './auth.ts'
 import type { WorkBuddyCatalog, WorkBuddyModelInfo } from './catalog.ts'
 import type { WorkBuddyShim } from './shim.ts'
+import { isKnownMultimodalModel } from './upstream.ts'
 
 /** Provider route this bundle owns. */
 export const WORKBUDDY_PROVIDER = 'workbuddy'
@@ -25,8 +26,8 @@ export const WORKBUDDY_STREAM_IDLE_TIMEOUT_MS = 300_000
 
 /**
  * Image-request budgets at the dsh-llm-pi-ai defaults; the profile type made
- * them required in 0.1.1-rc.2. WorkBuddy routes are text-only today, so these
- * bounds never bite unless image input is added to the catalog.
+ * them required in 0.1.1-rc.2. Hy3 (and other multimodal routes) now advertise
+ * image input, so these bounds apply to picture attachments on those models.
  */
 const REQUEST_IMAGE_BUDGETS = {
   maxRequestImageBytes: 20_971_520,
@@ -60,7 +61,7 @@ const INERT_AUTH: { credentials: CredentialStore; authContext: AuthContext } = {
 const NO_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } as const
 
 /** DSH thinking levels the WorkBuddy upstream never speaks. */
-const UNSUPPORTED_THINKING_LEVELS: ReadonlySet<string> = new Set(['minimal', 'xhigh', 'max'])
+const UNSUPPORTED_THINKING_LEVELS: ReadonlySet<string> = new Set(['minimal', 'xhigh'])
 
 /**
  * Resolve the set of reasoning-effort levels one model actually offers.
@@ -68,8 +69,11 @@ const UNSUPPORTED_THINKING_LEVELS: ReadonlySet<string> = new Set(['minimal', 'xh
  * - A model that declares `supportedEfforts` (e.g. hy3-x: `["low","high"]`)
  *   uses exactly those.
  * - The hy3 family declares none on the CLI entry, but hy3-x does, so hy3 is
- *   pinned to the same `["low","high"]` rather than offering a `medium` that
- *   the upstream silently ignores.
+ *   pinned to `["off","low","high","max"]`. `max` was verified against the
+ *   WorkBuddy upstream (2026-08-23): it emits real `reasoning_content` and
+ *   is heavier than the API `high` tier, which matches what the desktop UI's
+ *   "high" selection drives. `medium` stays excluded because the upstream
+ *   silently ignores it for hy3.
  * - A model with no declared set (e.g. deepseek-v4-*) keeps the full generic
  *   set including `medium`, so its levels stay selectable and are not clipped.
  */
@@ -80,7 +84,7 @@ function resolveEffortLevels(info: WorkBuddyModelInfo): readonly string[] {
     for (const level of ['low', 'medium', 'high']) if (set.has(level)) levels.push(level)
     return levels
   }
-  if (info.id.startsWith('hy3')) return ['off', 'low', 'high']
+  if (info.id.startsWith('hy3')) return ['off', 'low', 'high', 'max']
   return ['off', 'low', 'medium', 'high']
 }
 
@@ -94,7 +98,8 @@ function buildThinkingLevelMap(info: WorkBuddyModelInfo): Record<string, string 
     medium: supported.has('medium') ? 'medium' : null,
     high: supported.has('high') ? 'high' : null,
     xhigh: null,
-    max: null,
+    // `max` is supported by the WorkBuddy upstream for hy3 (verified 2026-08-23).
+    max: supported.has('max') ? 'max' : null,
   }
   for (const level of UNSUPPORTED_THINKING_LEVELS) map[level] = null
   return map
@@ -119,13 +124,21 @@ export interface WorkBuddyAdapter {
 /** Build one pi-ai model descriptor pointing at the loopback shim. */
 function toPiModel(info: WorkBuddyModelInfo, baseUrl: string): Model<Api> {
   const reasoningCapable = info.supportsReasoning || info.reasoningEffort !== undefined
+  // Multimodal models (e.g. hy3) must advertise image input so DSH lets the
+  // user attach pictures. The WorkBuddy catalog rarely exposes this flag, so
+  // prefer the explicit `supportsVision` flag set by upstream.ts, then fall
+  // back to the shared `isKnownMultimodalModel` heuristic as a second guard.
+  // This double layer is what keeps a model from silently regressing to
+  // text-only after the dynamic catalog overwrites the fallback list.
+  const supportsVision = info.supportsVision === true || isKnownMultimodalModel(info.id)
+  const input = supportsVision ? ['image', 'text'] : ['text']
   return {
     id: info.id,
     name: info.name,
     api: 'openai-completions',
     provider: WORKBUDDY_PROVIDER,
     baseUrl,
-    input: ['text'],
+    input,
     cost: NO_COST,
     contextWindow: info.contextWindow,
     maxTokens: info.maxTokens,

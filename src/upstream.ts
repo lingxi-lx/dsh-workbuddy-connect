@@ -42,6 +42,37 @@ export interface WorkBuddyUpstreamModel {
    * selectable rather than being silently clipped.
    */
   supportedEfforts?: readonly string[]
+  /**
+   * Whether the model accepts image input (multimodal/vision). The WorkBuddy
+   * upstream catalog does not always expose this; when absent we fall back to
+   * a per-model heuristic (hy3 is known multimodal, and several models whose
+   * upstream description literally says "多模态"/"原生多模态").
+   */
+  supportsVision?: boolean
+}
+
+/**
+ * Model ids the WorkBuddy upstream never advertises as multimodal but which
+ * reliably accept images. The hy3 family is multimodal; the rest are taken
+ * from the upstream catalog's own Chinese descriptions ("多模态模型" /
+ * "原生多模态"). Matching is case-insensitive on the raw `id`.
+ *
+ * Centralizing this keeps {@link WorkBuddyUpstreamClient.fetchModels} and the
+ * adapter's `toPiModel` in lockstep so a model never silently regresses to
+ * text-only when the dynamic catalog replaces the static fallback.
+ */
+const MULTIMODAL_MODEL_IDS: readonly string[] = [
+  'glm-5v-turbo',
+  'kimi-k2.7',
+  'kimi-k2.6',
+  'minimax-m3',
+]
+
+/** Whether a model id names a known multimodal model, regardless of upstream flags. */
+export function isKnownMultimodalModel(id: string): boolean {
+  const lower = id.toLowerCase()
+  if (lower.startsWith('hy3')) return true
+  return MULTIMODAL_MODEL_IDS.includes(lower)
 }
 
 /** One billing package and its remaining credit. */
@@ -411,6 +442,15 @@ export class WorkBuddyUpstreamClient {
       const supportedEfforts = Array.isArray(reasoningObj?.['supportedEfforts'])
         ? (reasoningObj['supportedEfforts'] as unknown[]).filter((v): v is string => typeof v === 'string')
         : undefined
+      // Multimodal capability: prefer an explicit upstream flag when present
+      // (common field names), otherwise fall back to a per-model heuristic.
+      const visionFlag =
+        wrapped['supportsVision'] === true ||
+        wrapped['vision'] === true ||
+        wrapped['multimodal'] === true ||
+        (typeof wrapped['modalities'] === 'string' && /image/i.test(wrapped['modalities'])) ||
+        (Array.isArray(wrapped['modalities']) && wrapped['modalities'].some((m) => typeof m === 'string' && /image/i.test(m)))
+      const supportsVision = visionFlag || isKnownMultimodalModel(id)
       byId.set(id, {
         id,
         name: typeof wrapped['name'] === 'string' && wrapped['name'] !== '' ? wrapped['name'] : id,
@@ -421,6 +461,7 @@ export class WorkBuddyUpstreamClient {
         ...reasoningEffort === undefined ? {} : { reasoningEffort },
         ...supportsReasoning ? { supportsReasoning: true } : {},
         ...supportedEfforts === undefined || supportedEfforts.length === 0 ? {} : { supportedEfforts },
+        ...supportsVision ? { supportsVision: true } : {},
       })
     }
     const models = cliIds

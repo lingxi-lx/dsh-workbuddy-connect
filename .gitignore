@@ -2,3 +2,5 @@ node_modules/
 coverage/
 *.log
 .DS_Store
+# 构建产物：由 tsdown 从 src/ 生成，lib/ 不应进版本控制（通过 npm publish 分发）
+lib/
