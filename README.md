@@ -42,7 +42,7 @@
 
 ```sh
 # npm（推荐，自带预构建产物）
-dsh plugin --profile web add dsh-workbuddy-connect-patched
+dsh plugin --profile web add @jojoman2024/dsh-workbuddy-connect-patched
 
 # 或从 GitHub 源码安装
 dsh plugin --profile web add github:jojoman2024/dsh-workbuddy-connect
@@ -52,7 +52,7 @@ dsh web
 
 ## 命令行
 
-`dsh plugin --profile web exec dsh-workbuddy-connect-patched status`：登录状态与剩余积分（`--json` 输出机器可读格式；另有 `doctor` 诊断、`logout` 清理凭据）。
+`dsh plugin --profile web exec @jojoman2024/dsh-workbuddy-connect-patched status`：登录状态与剩余积分（`--json` 输出机器可读格式；另有 `doctor` 诊断、`logout` 清理凭据）。
 
 ## 已知限制
 
