@@ -2,5 +2,5 @@ node_modules/
 coverage/
 *.log
 .DS_Store
-# 构建产物：由 tsdown 从 src/ 生成，lib/ 不应进版本控制（通过 npm publish 分发）
-lib/
+# 注意：lib/ 不再用 .gitignore 忽略，否则 npm publish 会一并忽略它（files 字段也救不回）。
+# git 已通过 `git rm --cached -r lib/` 停止跟踪该目录，因此它不会进版本库，无需在此忽略。
