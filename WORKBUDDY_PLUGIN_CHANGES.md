@@ -89,15 +89,16 @@ function resolveEffortLevels(info: WorkBuddyModelInfo): readonly string[] {
 
 ## 3. 构建与部署
 
-源码位于 `D:\dsh_workplace\2026-08-21\dsh-workbuddy-connect\src`。
+源码位于插件 clone 根目录的 `src/`。
 构建并覆盖到运行中的 profile：
 
 ```powershell
-$env:PATH = "C:\Users\jojoman\.workbuddy\binaries\node\versions\22.22.2;" + $env:PATH
+# Node.js 22 可执行文件需在 PATH 中（示例路径，请替换为你本机实际位置）
+$env:PATH = "$env:USERPROFILE\.workbuddy\binaries\node\versions\22.22.2;" + $env:PATH
 # 在 clone 根目录
 cmd /c "node_modules\.bin\tsdown"
-# 覆盖 profile 插件
-Copy-Item lib\* D:\dsh-standalone\home\profiles\web\node_modules\dsh-workbuddy-connect\lib -Recurse -Force
+# 覆盖 profile 插件（路径请替换为你 DSH 的 web profile node_modules 位置）
+Copy-Item lib\* <DSH_WEB_PROFILE>/node_modules/dsh-workbuddy-connect/lib -Recurse -Force
 ```
 
 > 注意：`pnpm run build` 在本机因 `ERR_PNPM_IGNORED_BUILDS` 失败，但 `cmd /c "node_modules\.bin\tsdown"` 实际构建成功（退出码 1 为误报）。
