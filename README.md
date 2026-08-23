@@ -1,5 +1,7 @@
-# DSH WorkBuddy Connect
+# DSH WorkBuddy Connect (patched)
 
+
+> 本仓库是 [corrinehu/dsh-workbuddy-connect](https://github.com/corrinehu/dsh-workbuddy-connect) 的修改版，主要修复 WorkBuddy 管路的思考等级生效问题。安装包名为 `dsh-workbuddy-connect-patched`。
 
 [English](./README.en.md) | 中文
 
@@ -24,23 +26,33 @@
 
 ![设置卡片显示账号与剩余积分](assets/3.png)
 
+## 与原版差异
+
+本仓库基于 [corrinehu/dsh-workbuddy-connect](https://github.com/corrinehu/dsh-workbuddy-connect) 修改，主要让 WorkBuddy 管路的思考等级（reasoning effort）真正生效：
+
+- 修复上游 `11128` 渠道校验错误（`developer` 角色改写为 `system`）。
+- 修复 hy3 思考等级不生效的问题（透传扁平 `reasoning_effort`，移除无效的嵌套 `reasoning`）。
+- 按模型精确暴露思考档位：hy3 仅 `Off / Low / High`，deepseek-v4-* 保留 `Off / Low / Medium / High`。
+
+完整改动清单见 [MODIFICATIONS.md](./MODIFICATIONS.md)。
+
 ## 安装
 
 前置：已安装并登录 WorkBuddy 桌面 App（插件复用 App 的登录状态，账号切换自动跟随）。
 
 ```sh
 # npm（推荐，自带预构建产物）
-dsh plugin --profile web add dsh-workbuddy-connect
+dsh plugin --profile web add dsh-workbuddy-connect-patched
 
 # 或从 GitHub 源码安装
-dsh plugin --profile web add github:corrinehu/dsh-workbuddy-connect
+dsh plugin --profile web add github:jojoman2024/dsh-workbuddy-connect
 
 dsh web
 ```
 
 ## 命令行
 
-`dsh plugin --profile web exec dsh-workbuddy-connect status`：登录状态与剩余积分（`--json` 输出机器可读格式；另有 `doctor` 诊断、`logout` 清理凭据）。
+`dsh plugin --profile web exec dsh-workbuddy-connect-patched status`：登录状态与剩余积分（`--json` 输出机器可读格式；另有 `doctor` 诊断、`logout` 清理凭据）。
 
 ## 已知限制
 

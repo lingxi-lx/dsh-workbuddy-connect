@@ -1,4 +1,6 @@
-# DSH WorkBuddy Connect
+# DSH WorkBuddy Connect (patched)
+
+> This repo is a patched fork of [corrinehu/dsh-workbuddy-connect](https://github.com/corrinehu/dsh-workbuddy-connect), mainly fixing reasoning-effort for the WorkBuddy provider. The npm package name is `dsh-workbuddy-connect-patched`.
 
 English | [中文](./README.md)
 
@@ -18,23 +20,33 @@ Expand the card to see the account, token validity, and remaining credit.
 
 ![Settings card showing account and remaining credit](assets/3.png)
 
+## Differences from upstream
+
+This repo is a patch on top of [corrinehu/dsh-workbuddy-connect](https://github.com/corrinehu/dsh-workbuddy-connect) that makes the WorkBuddy provider's reasoning effort actually work:
+
+- Fixes upstream `11128` channel-check error (`developer` role rewritten to `system`).
+- Fixes hy3 reasoning not engaging (passes the flat `reasoning_effort` through, drops the ineffective nested `reasoning`).
+- Exposes per-model thinking levels: hy3 only `Off / Low / High`; deepseek-v4-* keeps `Off / Low / Medium / High`.
+
+Full change list: [MODIFICATIONS.md](./MODIFICATIONS.md).
+
 ## Install
 
 Prerequisite: the WorkBuddy desktop app is installed and signed in (the plugin reuses the app's sign-in state and follows account switches automatically).
 
 ```sh
 # npm (recommended; ships prebuilt artifacts)
-dsh plugin --profile web add dsh-workbuddy-connect
+dsh plugin --profile web add dsh-workbuddy-connect-patched
 
 # or install from the GitHub source
-dsh plugin --profile web add github:corrinehu/dsh-workbuddy-connect
+dsh plugin --profile web add github:jojoman2024/dsh-workbuddy-connect
 
 dsh web
 ```
 
 ## CLI
 
-`dsh plugin --profile web exec dsh-workbuddy-connect status`: sign-in state and remaining credit (`--json` for machine-readable output; `doctor` for diagnostics and `logout` for credential cleanup are also available).
+`dsh plugin --profile web exec dsh-workbuddy-connect-patched status`: sign-in state and remaining credit (`--json` for machine-readable output; `doctor` for diagnostics and `logout` for credential cleanup are also available).
 
 ## Known limitations
 
