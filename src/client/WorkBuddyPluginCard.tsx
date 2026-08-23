@@ -52,6 +52,12 @@ const rowStyle: CSSProperties = { display: 'flex', alignItems: 'center', justify
 const statusStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 9, fontSize: 15, fontWeight: 500, color: 'var(--dsw-alias-label-primary)' }
 const buttonStyle: CSSProperties = { boxSizing: 'border-box', minHeight: 34, padding: '6px 14px', border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 18, background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 14, cursor: 'pointer' }
 const errorStyle: CSSProperties = { ...bodyStyle, color: 'var(--dsw-alias-state-error-primary)' }
+const modelsTableStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8 }
+const modelRowStyle: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 13, lineHeight: '20px', color: 'var(--dsw-alias-label-secondary)' }
+const modelNameStyle: CSSProperties = { flex: '0 0 auto', fontWeight: 500, color: 'var(--dsw-alias-label-primary)' }
+const modelMetaStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end' }
+const modelCreditsStyle: CSSProperties = { color: 'var(--dsw-alias-label-caption)', fontVariantNumeric: 'tabular-nums' }
+const modelEffortStyle: CSSProperties = { color: 'var(--dsw-alias-label-caption)', fontVariantNumeric: 'tabular-nums' }
 const quotaListStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 18, paddingTop: 2 }
 const quotaGroupStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 10 }
 const quotaTitleStyle: CSSProperties = { margin: 0, fontSize: 14, lineHeight: '20px', fontWeight: 600, color: 'var(--dsw-alias-label-primary)' }
@@ -78,6 +84,24 @@ function dotStyle(status: WorkBuddyWebStatus['status']): CSSProperties {
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat(undefined).format(value)
+}
+
+/** Normalize a credits string like "x0.00 credits" into "0.00x". */
+function formatCredits(credits: string | undefined): string {
+  if (credits === undefined) return ''
+  const match = /x(\d+(?:\.\d+)?)/.exec(credits)
+  return match === null ? credits : `${match[1]}x`
+}
+
+/** Localized label for a WorkBuddy reasoning effort. */
+function effortLabel(effort: string | undefined, t: WorkBuddyPluginCardInjected['t']): string {
+  switch (effort) {
+    case 'off': return t('effortOff')
+    case 'low': return t('effortLow')
+    case 'medium': return t('effortMedium')
+    case 'high': return t('effortHigh')
+    default: return effort ?? ''
+  }
 }
 
 function formatTime(ms: number): string {
@@ -230,6 +254,28 @@ export function WorkBuddyPluginCard({ t }: WorkBuddyPluginCardProps) {
                   )}
                   {status.creditsError === undefined ? null
                     : <p style={errorStyle}>{t('creditsError', { message: status.creditsError })}</p>}
+                  {status.models === undefined || status.models.length === 0
+                    ? <p style={bodyStyle}>{t('noModelsHint')}</p>
+                    : (
+                      <div style={quotaListStyle}>
+                        <div style={rowStyle}>
+                          <h3 style={quotaTitleStyle}>{t('modelsHeading')}</h3>
+                        </div>
+                        <div style={modelsTableStyle}>
+                          {status.models.map(model => (
+                            <div key={model.id} style={modelRowStyle}>
+                              <span style={modelNameStyle}>{model.name}</span>
+                              <span style={modelMetaStyle}>
+                                {model.credits === undefined ? null
+                                  : <span style={modelCreditsStyle}>{formatCredits(model.credits)}</span>}
+                                {model.reasoningEffort === undefined ? null
+                                  : <span style={modelEffortStyle}>{t('reasoningLabel')} {effortLabel(model.reasoningEffort, t)}</span>}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                 </>
               : null}
             {status.status === 'signed-out' ? <p style={bodyStyle}>{t('signedOutHint')}</p> : null}

@@ -13,6 +13,21 @@ interface WorkBuddyUpstreamModel {
   name: string;
   contextWindow: number;
   maxTokens: number;
+  /** Credit multiplier as the upstream spells it, e.g. "x0.00 credits". */
+  credits?: string;
+  /** Localized model description (中文优先，缺失时回退英文). */
+  descriptionZh?: string;
+  /** Default reasoning effort the model ships with, e.g. "high" / "medium". */
+  reasoningEffort?: string;
+  /** Whether the model supports reasoning-effort selection. */
+  supportsReasoning?: boolean;
+  /**
+   * The explicit set of reasoning-effort levels the model exposes, when the
+   * upstream declares it (e.g. hy3-x: ["low","high"]). Models that omit it
+   * (e.g. deepseek-v4-*) keep the full generic set, so their `medium` remains
+   * selectable rather than being silently clipped.
+   */
+  supportedEfforts?: readonly string[];
 }
 /** One billing package and its remaining credit. */
 interface WorkBuddyCreditAccount {

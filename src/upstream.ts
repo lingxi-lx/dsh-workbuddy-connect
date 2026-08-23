@@ -27,6 +27,21 @@ export interface WorkBuddyUpstreamModel {
   name: string
   contextWindow: number
   maxTokens: number
+  /** Credit multiplier as the upstream spells it, e.g. "x0.00 credits". */
+  credits?: string
+  /** Localized model description (中文优先，缺失时回退英文). */
+  descriptionZh?: string
+  /** Default reasoning effort the model ships with, e.g. "high" / "medium". */
+  reasoningEffort?: string
+  /** Whether the model supports reasoning-effort selection. */
+  supportsReasoning?: boolean
+  /**
+   * The explicit set of reasoning-effort levels the model exposes, when the
+   * upstream declares it (e.g. hy3-x: ["low","high"]). Models that omit it
+   * (e.g. deepseek-v4-*) keep the full generic set, so their `medium` remains
+   * selectable rather than being silently clipped.
+   */
+  supportedEfforts?: readonly string[]
 }
 
 /** One billing package and its remaining credit. */
@@ -182,7 +197,37 @@ export function prepareChatBody(source: string): string {
   const obj = body as Record<string, unknown>
   obj['stream'] = true
   normalizeToolChoice(obj)
+  normalizeReasoning(obj)
+  normalizeRoles(obj)
   return JSON.stringify(obj)
+}
+
+/**
+ * The WorkBuddy upstream refuses requests that carry OpenAI's newer
+ * `developer` role with `code 11128 "Illegal API invocation from an
+ * unapproved channel"`; it only accepts the classic `system` role. Map any
+ * `developer` message onto `system` so the request passes channel approval.
+ */
+function normalizeRoles(obj: Record<string, unknown>): void {
+  const messages = obj['messages']
+  if (!Array.isArray(messages)) return
+  for (const message of messages) {
+    if (typeof message === 'object' && message !== null && message['role'] === 'developer') {
+      message['role'] = 'system'
+    }
+  }
+}
+
+/**
+ * The WorkBuddy upstream honors the flat OpenAI `reasoning_effort` field to
+ * drive hy3's deep thinking (verified: `reasoning_effort:"high"` emits real
+ * `reasoning_content`; `"off"`/`"low"` are likewise accepted and `"off"`
+ * turns thinking off). A nested `reasoning:{ effort, summary }` object is
+ * ignored by the upstream and actively suppresses thinking, so drop it and
+ * let the flat field pass through unchanged.
+ */
+function normalizeReasoning(obj: Record<string, unknown>): void {
+  delete obj['reasoning']
 }
 
 /** Rewrite OpenAI `tool_choice` spellings into the upstream's string form. */
@@ -352,11 +397,30 @@ export class WorkBuddyUpstreamClient {
       const input = typeof wrapped['maxInputTokens'] === 'number' ? wrapped['maxInputTokens'] : 0
       const output = typeof wrapped['maxOutputTokens'] === 'number' ? wrapped['maxOutputTokens'] : 0
       if (input <= 0 || output <= 0) continue
+      const credits = typeof wrapped['credits'] === 'string' && wrapped['credits'] !== '' ? wrapped['credits'] : undefined
+      const descriptionRaw = typeof wrapped['descriptionZh'] === 'string' && wrapped['descriptionZh'] !== ''
+        ? wrapped['descriptionZh']
+        : typeof wrapped['descriptionEn'] === 'string' && wrapped['descriptionEn'] !== '' ? wrapped['descriptionEn'] : undefined
+      const reasoningObj = typeof wrapped['reasoning'] === 'object' && wrapped['reasoning'] !== null
+        ? wrapped['reasoning'] as Record<string, unknown>
+        : undefined
+      const reasoningEffort = typeof reasoningObj?.['effort'] === 'string' && reasoningObj['effort'] !== ''
+        ? reasoningObj['effort'] as string
+        : undefined
+      const supportsReasoning = wrapped['supportsReasoning'] === true
+      const supportedEfforts = Array.isArray(reasoningObj?.['supportedEfforts'])
+        ? (reasoningObj['supportedEfforts'] as unknown[]).filter((v): v is string => typeof v === 'string')
+        : undefined
       byId.set(id, {
         id,
         name: typeof wrapped['name'] === 'string' && wrapped['name'] !== '' ? wrapped['name'] : id,
         contextWindow: input,
         maxTokens: output,
+        ...credits === undefined ? {} : { credits },
+        ...descriptionRaw === undefined ? {} : { descriptionZh: descriptionRaw },
+        ...reasoningEffort === undefined ? {} : { reasoningEffort },
+        ...supportsReasoning ? { supportsReasoning: true } : {},
+        ...supportedEfforts === undefined || supportedEfforts.length === 0 ? {} : { supportedEfforts },
       })
     }
     const models = cliIds

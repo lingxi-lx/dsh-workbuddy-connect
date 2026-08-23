@@ -11,16 +11,18 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { WorkBuddyCredentialStore } from './auth.ts'
 import type { WorkBuddyUpstreamClient } from './upstream.ts'
+import type { WorkBuddyCatalog } from './catalog.ts'
 import { WORKBUDDY_STATUS_PATH } from './status-paths.ts'
-import type { WorkBuddyWebStatus } from './status-paths.ts'
+import type { WorkBuddyWebStatus, WorkBuddyWebModel } from './status-paths.ts'
 
 export { WORKBUDDY_STATUS_PATH } from './status-paths.ts'
-export type { WorkBuddyWebStatus } from './status-paths.ts'
+export type { WorkBuddyWebStatus, WorkBuddyWebModel } from './status-paths.ts'
 
 /** Constructor dependencies. */
 export interface WorkBuddyStatusRouteOptions {
   store: WorkBuddyCredentialStore
   client: Pick<WorkBuddyUpstreamClient, 'fetchCredits'>
+  catalog: WorkBuddyCatalog
 }
 
 /** Redact token-like content before it crosses to the browser. */
@@ -59,12 +61,21 @@ export async function workBuddyWebStatus(
 ): Promise<WorkBuddyWebStatus> {
   const authStatus = await deps.store.status()
   if (authStatus.state !== 'signed-in') return { status: 'signed-out' }
+  const models: readonly WorkBuddyWebModel[] = deps.catalog.current()
+    .map(model => ({
+      id: model.id,
+      name: model.name,
+      ...model.credits === undefined ? {} : { credits: model.credits },
+      ...model.descriptionZh === undefined ? {} : { descriptionZh: model.descriptionZh },
+      ...model.reasoningEffort === undefined ? {} : { reasoningEffort: model.reasoningEffort },
+    }))
   const status: WorkBuddyWebStatus = {
     status: 'signed-in',
     ...authStatus.nickname === undefined ? {} : { nickname: authStatus.nickname },
     ...authStatus.domain === undefined || authStatus.domain === '' ? {} : { domain: authStatus.domain },
     ...authStatus.source === undefined ? {} : { source: authStatus.source },
     ...authStatus.expiresAtMs === undefined ? {} : { expiresAt: authStatus.expiresAtMs },
+    ...models.length === 0 ? {} : { models },
   }
   try {
     const credential = await deps.store.current()

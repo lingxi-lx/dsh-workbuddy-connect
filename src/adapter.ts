@@ -59,6 +59,47 @@ const INERT_AUTH: { credentials: CredentialStore; authContext: AuthContext } = {
 /** No per-token pricing is knowable for a subscription quota; report zero. */
 const NO_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } as const
 
+/** DSH thinking levels the WorkBuddy upstream never speaks. */
+const UNSUPPORTED_THINKING_LEVELS: ReadonlySet<string> = new Set(['minimal', 'xhigh', 'max'])
+
+/**
+ * Resolve the set of reasoning-effort levels one model actually offers.
+ *
+ * - A model that declares `supportedEfforts` (e.g. hy3-x: `["low","high"]`)
+ *   uses exactly those.
+ * - The hy3 family declares none on the CLI entry, but hy3-x does, so hy3 is
+ *   pinned to the same `["low","high"]` rather than offering a `medium` that
+ *   the upstream silently ignores.
+ * - A model with no declared set (e.g. deepseek-v4-*) keeps the full generic
+ *   set including `medium`, so its levels stay selectable and are not clipped.
+ */
+function resolveEffortLevels(info: WorkBuddyModelInfo): readonly string[] {
+  if (Array.isArray(info.supportedEfforts) && info.supportedEfforts.length > 0) {
+    const set = new Set(info.supportedEfforts)
+    const levels: string[] = ['off']
+    for (const level of ['low', 'medium', 'high']) if (set.has(level)) levels.push(level)
+    return levels
+  }
+  if (info.id.startsWith('hy3')) return ['off', 'low', 'high']
+  return ['off', 'low', 'medium', 'high']
+}
+
+/** Build the per-model `thinkingLevelMap`: supported levels map to themselves, unsupported to `null`. */
+function buildThinkingLevelMap(info: WorkBuddyModelInfo): Record<string, string | null> {
+  const supported = new Set(resolveEffortLevels(info))
+  const map: Record<string, string | null> = {
+    off: supported.has('off') ? 'off' : null,
+    minimal: null,
+    low: supported.has('low') ? 'low' : null,
+    medium: supported.has('medium') ? 'medium' : null,
+    high: supported.has('high') ? 'high' : null,
+    xhigh: null,
+    max: null,
+  }
+  for (const level of UNSUPPORTED_THINKING_LEVELS) map[level] = null
+  return map
+}
+
 /** Constructor dependencies. */
 export interface WorkBuddyAdapterOptions {
   shim: WorkBuddyShim
@@ -77,6 +118,7 @@ export interface WorkBuddyAdapter {
 
 /** Build one pi-ai model descriptor pointing at the loopback shim. */
 function toPiModel(info: WorkBuddyModelInfo, baseUrl: string): Model<Api> {
+  const reasoningCapable = info.supportsReasoning || info.reasoningEffort !== undefined
   return {
     id: info.id,
     name: info.name,
@@ -87,6 +129,12 @@ function toPiModel(info: WorkBuddyModelInfo, baseUrl: string): Model<Api> {
     cost: NO_COST,
     contextWindow: info.contextWindow,
     maxTokens: info.maxTokens,
+    // P1: expose the WorkBuddy reasoning effort as a DSH thinking-level
+    // selector. Each model advertises only the levels it actually supports
+    // (hy3: Off/Low/High; deepseek-v4-*: Off/Low/Medium/High), so `medium`
+    // stays selectable for models that honor it and is hidden for those that
+    // do not.
+    ...reasoningCapable ? { reasoning: true, thinkingLevelMap: buildThinkingLevelMap(info) } : {},
   } as unknown as Model<Api>
 }
 

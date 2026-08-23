@@ -16,6 +16,18 @@ export interface WorkBuddyWebCredits {
   accounts: readonly WorkBuddyWebCreditAccount[]
 }
 
+/** One model and its credit multiplier / default reasoning effort, for the card. */
+export interface WorkBuddyWebModel {
+  id: string
+  name: string
+  /** Credit multiplier as the upstream spells it, e.g. "x0.00 credits". */
+  credits?: string
+  /** Localized model description. */
+  descriptionZh?: string
+  /** Default reasoning effort, e.g. "high" / "medium". */
+  reasoningEffort?: string
+}
+
 /** The JSON document the plugin card renders. */
 export type WorkBuddyWebStatus =
   | { status: 'signed-out' }
@@ -27,5 +39,6 @@ export type WorkBuddyWebStatus =
     expiresAt?: number
     credits?: WorkBuddyWebCredits
     creditsError?: string
+    models?: readonly WorkBuddyWebModel[]
   }
   | { status: 'error'; message: string }

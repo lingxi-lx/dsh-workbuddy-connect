@@ -20,6 +20,14 @@ export const en = {
   refreshing: 'Refreshing…',
   requestFailed: 'Request failed',
   accountHeading: 'Account',
+  modelsHeading: 'Models & credit multiplier',
+  reasoningLabel: 'Reasoning',
+  effortOff: 'Off',
+  effortLow: 'Low',
+  effortMedium: 'Medium',
+  effortHigh: 'High',
+  unknownCredits: 'unknown',
+  noModelsHint: 'Model catalog not loaded yet.',
 } as const
 
 export type WorkBuddySettingsKey = keyof typeof en
@@ -44,4 +52,12 @@ export const zh: Record<WorkBuddySettingsKey, string> = {
   refreshing: '正在刷新…',
   requestFailed: '请求失败',
   accountHeading: '账号',
+  modelsHeading: '模型与倍率',
+  reasoningLabel: '思考强度',
+  effortOff: '关闭',
+  effortLow: '低',
+  effortMedium: '中',
+  effortHigh: '高',
+  unknownCredits: '未知',
+  noModelsHint: '模型目录尚未加载。',
 }
