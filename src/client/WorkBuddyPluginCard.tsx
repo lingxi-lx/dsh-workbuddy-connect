@@ -4,9 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
-import { WORKBUDDY_STATUS_PATH, WORKBUDDY_SET_KEY_PATH, WORKBUDDY_SET_MODE_PATH } from '../status-paths.ts'
+import { WORKBUDDY_STATUS_PATH, WORKBUDDY_SET_KEY_PATH, WORKBUDDY_SET_MODE_PATH, WORKBUDDY_REFRESH_PATH } from '../status-paths.ts'
 import type { WorkBuddySearchMode } from '../status-paths.ts'
 import type { WorkBuddyWebStatus } from '../status-paths.ts'
+import type { WorkBuddyRefreshResult } from '../status-paths.ts'
 import type { WorkBuddySettingsKey } from './locales.ts'
 
 /** Localized copy injected by the browser-plugin registration. */
@@ -165,6 +166,7 @@ const modelsTableStyle: CSSProperties = { display: 'flex', flexDirection: 'colum
 const modelRowStyle: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 13, lineHeight: '20px', color: 'var(--dsw-alias-label-secondary)' }
 const modelNameStyle: CSSProperties = { flex: '0 0 auto', fontWeight: 500, color: 'var(--dsw-alias-label-primary)' }
 const modelMetaStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end' }
+const modelCreditsStyle: CSSProperties = { color: 'var(--dsw-alias-label-caption)', fontVariantNumeric: 'tabular-nums' }
 const modelEffortStyle: CSSProperties = { color: 'var(--dsw-alias-label-caption)', fontVariantNumeric: 'tabular-nums' }
 
 function dotStyle(status: WorkBuddyWebStatus['status']): CSSProperties {
@@ -178,6 +180,13 @@ function dotStyle(status: WorkBuddyWebStatus['status']): CSSProperties {
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat(undefined).format(value)
+}
+
+/** Normalize a credits string like "x0.00 credits" into "0.00x". */
+function formatCredits(credits: string | undefined): string {
+  if (credits === undefined) return ''
+  const match = /x(\d+(?:\.\d+)?)/.exec(credits)
+  return match === null ? credits : `${match[1]}x`
 }
 
 /** Localized label for a WorkBuddy reasoning effort. */
@@ -256,9 +265,27 @@ export function WorkBuddyPluginCard({ t }: WorkBuddyPluginCardProps) {
 
   const manualRefresh = async (): Promise<void> => {
     setBusy(true)
+    setSaveMsg(null)
     try {
-      await refresh()
+      // 1) Ask the host to re-fetch the upstream catalog and swap it in, so
+      //    new models appear in the card AND the model selector immediately.
+      const response = await fetch(WORKBUDDY_REFRESH_PATH, {
+        method: 'POST',
+        headers: { accept: 'application/json' },
+        credentials: 'same-origin',
+      })
+      const result: WorkBuddyRefreshResult | null = await response.json().catch(() => null)
+      if (response.ok && result?.ok === true) {
+        setSaveMsg({ type: 'ok', text: t('refreshDone', { count: String(result.modelCount) }) })
+      } else {
+        const detail = result?.ok === false ? result.error : `HTTP ${response.status}`
+        setSaveMsg({ type: 'err', text: t('refreshFailed', { message: detail }) })
+      }
+    } catch (error: unknown) {
+      setSaveMsg({ type: 'err', text: t('refreshFailed', { message: error instanceof Error ? error.message : t('requestFailed') }) })
     } finally {
+      // 2) Re-read status so the card shows the (possibly new) model list.
+      await refresh()
       if (mounted.current) setBusy(false)
     }
   }
@@ -471,6 +498,8 @@ export function WorkBuddyPluginCard({ t }: WorkBuddyPluginCardProps) {
                             <div key={model.id} style={modelRowStyle}>
                               <span style={modelNameStyle}>{model.name}</span>
                               <span style={modelMetaStyle}>
+                                {model.credits === undefined ? null
+                                  : <span style={modelCreditsStyle}>{formatCredits(model.credits)}</span>}
                                 {model.reasoningEffort === undefined ? null
                                   : <span style={modelEffortStyle}>{t('reasoningLabel')} {effortLabel(model.reasoningEffort, t)}</span>}
                               </span>

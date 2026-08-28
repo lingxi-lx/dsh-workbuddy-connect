@@ -10,6 +10,10 @@ export const WORKBUDDY_SET_KEY_PATH = '/plugins/dsh-workbuddy-connect/set-tinyfi
 /** Plugin-owned endpoint that persists the web-search engine mode, consumed by the card. */
 export const WORKBUDDY_SET_MODE_PATH = '/plugins/dsh-workbuddy-connect/set-search-mode'
 
+/** Plugin-owned endpoint that re-fetches the model catalog from the upstream,
+ *  consumed by the card's Refresh button. */
+export const WORKBUDDY_REFRESH_PATH = '/plugins/dsh-workbuddy-connect/refresh'
+
 /** Valid web-search engine modes chosen on the plugin card. */
 export type WorkBuddySearchMode = 'auto' | 'tinyfish-global' | 'system-global'
 
@@ -57,3 +61,8 @@ export type WorkBuddyWebStatus =
     searchMode?: WorkBuddySearchMode
   }
   | { status: 'error'; message: string; tinyfishKeyConfigured?: boolean }
+
+/** Result of a manual model-catalog refresh, echoed to the card. */
+export type WorkBuddyRefreshResult =
+  | { ok: true; modelCount: number; modelIds: readonly string[] }
+  | { ok: false; error: string }

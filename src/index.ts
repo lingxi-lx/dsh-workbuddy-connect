@@ -18,6 +18,7 @@ import { registerWorkBuddyStatusRoute } from './web-status.ts'
 import { registerSetTinyFishKeyRoute } from './set-credential.ts'
 import { readTinyFishKey, readSearchMode } from './key-store.ts'
 import { registerSetSearchModeRoute } from './set-search-mode.ts'
+import { registerRefreshModelsRoute, refreshWorkBuddyModels } from './refresh-models.ts'
 import { createTinyFishProvider, createDeepSeekOfficialProvider, TINYFISH_PROVIDER_ID, DEEPSEEK_PROVIDER_ID } from './search-provider.ts'
 import { clearHostHeartbeat, writeHostHeartbeat } from './host-heartbeat.ts'
 
@@ -200,6 +201,17 @@ export function apply(ctx: Context, config: Config): void {
   // Persist the web-search engine mode (auto / tinyfish-global / system-global).
   ctx.inject(['webServer'], webCtx => registerSetSearchModeRoute(webCtx))
 
+  // Manual model-catalog refresh backing the card's Refresh button. The
+  // adapter invalidator is resolved lazily (it exists only after the shim
+  // listens), so the route reads it through `invalidateRef` at call time.
+  let invalidateRef: (() => void) | undefined
+  ctx.inject(['webServer'], webCtx => registerRefreshModelsRoute(webCtx, {
+    store,
+    client,
+    catalog,
+    getInvalidate: () => invalidateRef,
+  }))
+
   // The settings section is what makes the provider visible on the Models
   // settings page (settings.describe joins the provider directory), and it
   // keeps the configured auth-file path live across edits.
@@ -223,7 +235,6 @@ export function apply(ctx: Context, config: Config): void {
     .then(() => {
       if (stopped) return
 
-      let invalidate: (() => void) | undefined
       try {
         // Constructed only once the listener holds a port: the provider's
         // models read the shim origin at construction time.
@@ -233,7 +244,7 @@ export function apply(ctx: Context, config: Config): void {
           catalog,
           resolveAttachments: () => ctx.get('attachments'),
         })
-        invalidate = workbuddy.invalidate
+        invalidateRef = workbuddy.invalidate
 
         let releaseAdapter: (() => void) | undefined
         let releaseDirectory: (() => void) | undefined
@@ -276,12 +287,16 @@ export function apply(ctx: Context, config: Config): void {
 
       void (async () => {
         try {
-          const credential = await store.current()
-          if (credential === undefined || stopped) return
-          const models = await client.fetchModels(credential)
           if (stopped) return
-          catalog.set([...models])
-          invalidate?.()
+          const result = await refreshWorkBuddyModels({ store, client, catalog, getInvalidate: () => invalidateRef })
+          if (stopped) return
+          if (!result.ok) {
+            ctx.logger.warn(
+              `dsh-workbuddy-connect: dynamic model catalog unavailable (${result.error}); serving the static fallback list`,
+            )
+          } else {
+            ctx.logger.info(`dsh-workbuddy-connect: model catalog refreshed from upstream (${result.modelCount} models)`)
+          }
         } catch (error: unknown) {
           ctx.logger.warn(
             'dsh-workbuddy-connect: dynamic model catalog unavailable; serving the static fallback list',
