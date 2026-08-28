@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import type { UserConfig } from 'tsdown'
 
-const PLUGIN_ID = 'dsh-workbuddy-connect'
+const PLUGIN_ID = '@jojoman2024/dsh-workbuddy-connect-patched'
 
 /** Read the npm version once so the build injects it into src/version.ts. */
 const PACKAGE_VERSION = JSON.parse(
@@ -34,6 +34,10 @@ export default [
     dts: true,
     clean: true,
     define: VERSION_DEFINE,
+    outputOptions: {
+      // 去掉非入口 chunk 的内容哈希，固定命名为 host-heartbeat.js
+      chunkFileNames: '[name].js',
+    },
     deps: {
       neverBundle: [
         '@earendil-works/pi-ai',

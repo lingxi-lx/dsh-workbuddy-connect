@@ -3,6 +3,16 @@
 /** Plugin-owned status endpoint consumed by its browser half. */
 export const WORKBUDDY_STATUS_PATH = '/plugins/dsh-workbuddy-connect/status'
 
+/** Plugin-owned endpoint that persists the TinyFish API key into DSH's official
+ *  local credential store (`ctx.credentials`), consumed by the plugin card. */
+export const WORKBUDDY_SET_KEY_PATH = '/plugins/dsh-workbuddy-connect/set-tinyfish-key'
+
+/** Plugin-owned endpoint that persists the web-search engine mode, consumed by the card. */
+export const WORKBUDDY_SET_MODE_PATH = '/plugins/dsh-workbuddy-connect/set-search-mode'
+
+/** Valid web-search engine modes chosen on the plugin card. */
+export type WorkBuddySearchMode = 'auto' | 'tinyfish-global' | 'system-global'
+
 /** One billing package and its remaining credit. */
 export interface WorkBuddyWebCreditAccount {
   packageName: string
@@ -32,7 +42,7 @@ export interface WorkBuddyWebModel {
 
 /** The JSON document the plugin card renders. */
 export type WorkBuddyWebStatus =
-  | { status: 'signed-out' }
+  | { status: 'signed-out'; tinyfishKeyConfigured?: boolean }
   | {
     status: 'signed-in'
     nickname?: string
@@ -42,5 +52,8 @@ export type WorkBuddyWebStatus =
     credits?: WorkBuddyWebCredits
     creditsError?: string
     models?: readonly WorkBuddyWebModel[]
+    tinyfishKeyConfigured?: boolean
+    /** Selected web-search engine mode; drives which provider is used per request. */
+    searchMode?: WorkBuddySearchMode
   }
-  | { status: 'error'; message: string }
+  | { status: 'error'; message: string; tinyfishKeyConfigured?: boolean }

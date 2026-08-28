@@ -14,6 +14,7 @@ import type { WorkBuddyUpstreamClient } from './upstream.ts'
 import type { WorkBuddyCatalog } from './catalog.ts'
 import { WORKBUDDY_STATUS_PATH } from './status-paths.ts'
 import type { WorkBuddyWebStatus, WorkBuddyWebModel } from './status-paths.ts'
+import { readTinyFishKey, readSearchMode } from './key-store.ts'
 
 export { WORKBUDDY_STATUS_PATH } from './status-paths.ts'
 export type { WorkBuddyWebStatus, WorkBuddyWebModel } from './status-paths.ts'
@@ -59,8 +60,13 @@ function loopbackOrigin(req: IncomingMessage): boolean {
 export async function workBuddyWebStatus(
   deps: WorkBuddyStatusRouteOptions,
 ): Promise<WorkBuddyWebStatus> {
+  // Report whether a TinyFish search key is configured (never the key itself).
+  const tinyfishKeyConfigured = readTinyFishKey() !== undefined
+  // Report the selected web-search engine mode (auto / tinyfish-global / system-global).
+  const searchMode = readSearchMode()
+
   const authStatus = await deps.store.status()
-  if (authStatus.state !== 'signed-in') return { status: 'signed-out' }
+  if (authStatus.state !== 'signed-in') return { status: 'signed-out', tinyfishKeyConfigured }
   const models: readonly WorkBuddyWebModel[] = deps.catalog.current()
     .map(model => ({
       id: model.id,
@@ -77,6 +83,8 @@ export async function workBuddyWebStatus(
     ...authStatus.source === undefined ? {} : { source: authStatus.source },
     ...authStatus.expiresAtMs === undefined ? {} : { expiresAt: authStatus.expiresAtMs },
     ...models.length === 0 ? {} : { models },
+    tinyfishKeyConfigured,
+    searchMode,
   }
   try {
     const credential = await deps.store.current()
